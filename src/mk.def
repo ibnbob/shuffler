@@ -1,0 +1,7 @@
+CCSRCS 	= 
+EXPORT	= 
+ESRC 	= Main.cc
+EXE	= test
+LIB	= 
+LIBS    = 
+CFLAGSL = -Wall -Werror -Wextra

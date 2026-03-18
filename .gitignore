@@ -1,0 +1,9 @@
+test*
+*.[oa]
+.obj-*
+.d
+*~
+lib/
+include/
+makefile
+TAGS
