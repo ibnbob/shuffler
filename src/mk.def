@@ -1,7 +1,7 @@
 CCSRCS 	= 
 EXPORT	= 
 ESRC 	= Main.cc
-EXE	= test
+EXE	= shuffler
 LIB	= 
 LIBS    = 
 CFLAGSL = -Wall -Werror -Wextra

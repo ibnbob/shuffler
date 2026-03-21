@@ -3,7 +3,10 @@
 //      Abstract : Driver
 //
 
+#include "Args.h"
+
 #include <algorithm>
+#include <cassert>
 #include <csignal>
 #include <cstdint>
 #include <numeric>
@@ -14,14 +17,45 @@
 
 using Deck = std::vector<unsigned int>;
 
-//      Function : handleIntr
+//      Function : handler
 //      Abstract : Handle a SIGINT
-static volatile bool gIntrSeen = false;
+static volatile sig_atomic_t gSignal = 0;
 void
-handleIntr(int sig)
+handler(int sig)
 {
-  gIntrSeen = true;
-} // handleIntr
+  gSignal = sig;
+} // handler
+
+
+//      Struct    : ShuffleArgs
+//      Abstract : Command line argument parser.
+struct ShuffleArgs : public argparse::Args {
+  size_t &n = kwarg("n", "size of deck.").set_default(52);
+  size_t &m = kwarg("m", "number of target (face) cards.").set_default(12);
+  std::optional<unsigned int> &seed =
+    kwarg("s,seed",
+          "seed for random number generator.");
+
+  void prolog() override {
+    std::cout << R"(
+Calculate and simulate solution of problem M/A1 from the Puzzle Corner
+of the March/April 2026 MIT Alumni News."
+)"<< std::endl;
+  } // prolog
+
+  void epilog() override {
+    std::cout << R"(
+For a randomly shuffled deck of n cards, what is the probability that
+the first m cards are special. The defaults are n = 52 and m = 12. This
+corresponds to the original problem of a regular deck with the face
+cards being special.
+
+The program first calculates the probabilities and then starts to
+simulate random shuffles indefinitely. To print out current statistics,
+type Ctrl+C (SIGINT). Type Ctrl+\ (SIGQUIT) to exit.
+)" << std::endl;
+  } // epilog
+}; // ShuffleArgs
 
 
 //      Class    : Shuffler
@@ -34,9 +68,11 @@ public:
     _prng(seed),
     _trials(0)
   {
+    std::cout << "seed=" << seed << std::endl;
     _deck.resize(_n);
     std::iota(_deck.begin(), _deck.end(), 0);
     _counts.resize(_m+1, 0);
+    computeProbs();
   }; // CTOR
   Shuffler(size_t n, size_t m) : Shuffler(n, m, 0xdeadbeef) {};
   Shuffler() : Shuffler(52, 12) {};
@@ -60,36 +96,17 @@ public:
 
 
 private:
-  void shuffle() { std::shuffle(_deck.begin(), _deck.end(), _prng); };
-  Deck &getDeck() { return _deck; };
-
-  void checkIntr() {
-    if (::gIntrSeen) {
-      ::gIntrSeen = false;
-      printStats();
-    } // if
-  } // checkIntr
-
-  void printStats() {
-    std::cout << "Trials: " << _trials << std::endl;
-    for (size_t jdx = 0; jdx <= _m; ++jdx) {
-      double p = (static_cast<double>(_counts[jdx]) /
-                  static_cast<double>(_trials));
-      std::cout << std::setw(2) << jdx << " : "
-                << std::setw(16)
-                << std::fixed
-                << std::setprecision(14)
-                << p
-                << std::endl;
-
-    } // for
-    std::cout << std::endl;
-  } // printStats
+  void computeProbs();
+  void shuffle();
+  void checkIntr();
+  void printStats();
 
   // Data
   size_t _n;
   size_t _m;
   std::default_random_engine _prng;
+
+  std::vector<double> _probability;
 
   Deck _deck;
   size_t _trials;
@@ -97,18 +114,134 @@ private:
 }; // Shuffler
 
 
+//      Function : Shuffler::computeProbs
+//      Abstract : Compute the probabilities of each result. The
+//      probability of seeing exactly k special cards is
+//
+//      (m!)*(n-m)*(n-k-1)!
+//      ------------------- =
+//           (m-k)!*n!
+//
+//      (m!)*(n-m)   (n-k-1)!
+//      ---------- * ---------
+//        (m-k)!        n!
+void
+Shuffler::computeProbs()
+{
+  std::vector<double> numerator;
+  std::vector<double> denominator;
+
+  double x = 0;
+
+  _probability.resize(_m+1);
+  for (size_t k = 0; k <= _m; ++k) {
+    // reduced version of (m!*(n-m)) / (m-k)!
+    x = _m;
+    while (x > _m-k) {
+      numerator.push_back(x--);
+    } // while
+    numerator.push_back(_n-_m);
+
+    // reduced version of (n-k-1)!/n!
+    x = _n;
+    while (x > _n-k-1) {
+      denominator.push_back(x--);
+    } // while
+
+    double p = 1.0;
+    assert(denominator.size() == numerator.size());
+    while (numerator.size()) {
+      p /= denominator.back();
+      denominator.pop_back();
+      p *= numerator.back();
+      numerator.pop_back();
+    } // while
+    _probability[k] = p;
+    std::cout << std::setw(2) << k << " : " << p << std::endl;
+  } // for each outcome;
+} // Shuffler::computeProbs
+
+
+//      Function : Shuffler::shuffle
+//      Abstract : Shuffle the deck.
+void
+Shuffler::shuffle()
+{
+  std::uniform_int_distribution<> rng(0, _n-1);
+#if 0
+  // For some reason, then standard library function gives weird
+  // results for lengths of 11 and 12 with the default parameters to
+  // the problem. To wit, they never seem to occur.
+  std::shuffle(_deck.begin(), _deck.end(), _prng);
+#else
+  for (size_t idx = 0; idx < _n; ++idx) {
+    size_t jdx = rng(_prng);
+    std::swap(_deck[idx], _deck[jdx]);
+  } // for
+#endif
+} // Shuffler::shuffle
+
+
+//      Function : Shuffler::checkIntr
+//      Abstract : Check for SIGINT and SIGQUIT
+void
+Shuffler::checkIntr()
+{
+  if (::gSignal) {
+    printStats();
+    if (::gSignal == SIGQUIT) {
+      exit(0);
+    } // if quit
+    ::gSignal = 0;
+  } // if intr
+} // Shuffler::checkIntr
+
+
+//      Function : Shuffler::printStats
+//      Abstract : Print current statistics
+void
+Shuffler::printStats()
+{
+  std::cout << "\nTrials: " << _trials << std::endl;
+  for (size_t jdx = 0; jdx <= _m; ++jdx) {
+    double e = (static_cast<double>(_trials) * _probability[jdx]);
+    std::cout << std::setw(2) << jdx << " : "
+              << std::setw(16)
+              << _counts[jdx] << " : "
+              << std::fixed
+              << std::setprecision(2)
+              << e
+              << std::endl;
+
+  } // for
+} // Shuffler::printStats
+
+
 //      Function : main
 //      Abstract : Main driver.
 int
 main(int argc, char *argv[])
 {
-  signal(SIGINT, handleIntr);
+  signal(SIGINT, handler);
+  signal(SIGQUIT, handler);
 
-  Shuffler shuffler{};
+  auto args = argparse::parse<ShuffleArgs>(argc, argv);
+  args.print();
 
-  while (true) {
-    shuffler.runOne();
-  } // while
+  if (args.m <= args.n) {
+    Shuffler shuffler(args.n,
+                      args.m,
+                      args.seed ? args.seed.value()
+                      : std::random_device()());;
+
+    while (true) {
+      shuffler.runOne();
+    } // while
+  } else {
+    std::cerr << "Argument m must be less than or equal to argument n."
+              << std::endl;
+    exit(1);
+  } // if args ok
 
   return 0;
 } // main
