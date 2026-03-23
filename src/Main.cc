@@ -35,24 +35,26 @@ struct ShuffleArgs : public argparse::Args {
   std::optional<unsigned int> &seed =
     kwarg("s,seed",
           "seed for random number generator.");
+  bool &standard = flag("S,standard",
+                        "use STL version of shuffle().");
 
   void prolog() override {
     std::cout << R"(
-Calculate and simulate solution of problem M/A1 from the Puzzle Corner
-of the March/April 2026 MIT Alumni News."
+Calculate and simulate solution of Problem M/A1 from the March/April
+2026 MIT Alumni News Puzzle Corner.
 )"<< std::endl;
   } // prolog
 
   void epilog() override {
     std::cout << R"(
-For a randomly shuffled deck of n cards, what is the probability that
-the first m cards are special. The defaults are n = 52 and m = 12. This
-corresponds to the original problem of a regular deck with the face
-cards being special.
+For a randomly shuffled deck of n cards with m special cards, what is
+the probability that the first k cards are special. The defaults are
+n = 52 and m = 12. This corresponds to the original problem of a regular
+deck with the face cards being special.
 
 The program first calculates the probabilities and then starts to
 simulate random shuffles indefinitely. To print out current statistics,
-type Ctrl+C (SIGINT). Type Ctrl+\ (SIGQUIT) to exit.
+type Ctrl+C (SIGINT). Type Ctrl+\ (SIGQUIT) to print statistics and exit.
 )" << std::endl;
   } // epilog
 }; // ShuffleArgs
@@ -62,11 +64,12 @@ type Ctrl+C (SIGINT). Type Ctrl+\ (SIGQUIT) to exit.
 //      Abstract : Class for shuffling a deck of n cards.
 class Shuffler {
 public:
-  Shuffler(size_t n, size_t m, unsigned int seed) :
+  Shuffler(size_t n, size_t m, unsigned int seed, bool standard) :
     _n(n),
     _m(m),
     _prng(seed),
-    _trials(0)
+    _trials(0),
+    _standard(standard)
   {
     std::cout << "seed=" << seed << std::endl;
     _deck.resize(_n);
@@ -74,7 +77,7 @@ public:
     _counts.resize(_m+1, 0);
     computeProbs();
   }; // CTOR
-  Shuffler(size_t n, size_t m) : Shuffler(n, m, 0xdeadbeef) {};
+  Shuffler(size_t n, size_t m) : Shuffler(n, m, 0xdeadbeef, false) {};
   Shuffler() : Shuffler(52, 12) {};
   ~Shuffler() {}; // DTOR
 
@@ -111,6 +114,7 @@ private:
   Deck _deck;
   size_t _trials;
   std::vector<size_t> _counts;
+  bool _standard;
 }; // Shuffler
 
 
@@ -130,10 +134,9 @@ Shuffler::computeProbs()
 {
   std::vector<double> numerator;
   std::vector<double> denominator;
-
+  std::cout << std::endl;
   double x = 0;
-
-  _probability.resize(_m+1);
+    _probability.resize(_m+1);
   for (size_t k = 0; k <= _m; ++k) {
     // reduced version of (m!*(n-m)) / (m-k)!
     x = _m;
@@ -167,18 +170,23 @@ Shuffler::computeProbs()
 void
 Shuffler::shuffle()
 {
-  std::uniform_int_distribution<> rng(0, _n-1);
-#if 0
-  // For some reason, then standard library function gives weird
-  // results for lengths of 11 and 12 with the default parameters to
-  // the problem. To wit, they never seem to occur.
-  std::shuffle(_deck.begin(), _deck.end(), _prng);
-#else
-  for (size_t idx = 0; idx < _n; ++idx) {
-    size_t jdx = rng(_prng);
-    std::swap(_deck[idx], _deck[jdx]);
-  } // for
-#endif
+  static bool once = false;
+  if (_standard) {
+    // For some reason, then standard library function gives weird
+    // results for lengths of 11 and 12 with the default parameters to
+    // the problem. To wit, they never seem to occur.
+    std::shuffle(_deck.begin(), _deck.end(), _prng);
+  } else {
+    if (not once) {
+      std::cout << "Using home-brew shuffle." << std::endl;
+      once = true;
+    } //
+    std::uniform_int_distribution<> rng(0, _n-1);
+    for (size_t idx = 0; idx < _n; ++idx) {
+      size_t jdx = rng(_prng);
+      std::swap(_deck[idx], _deck[jdx]);
+    } // for
+  } // if
 } // Shuffler::shuffle
 
 
@@ -232,7 +240,8 @@ main(int argc, char *argv[])
     Shuffler shuffler(args.n,
                       args.m,
                       args.seed ? args.seed.value()
-                      : std::random_device()());;
+                      : std::random_device()(),
+                      args.standard);;
 
     while (true) {
       shuffler.runOne();
