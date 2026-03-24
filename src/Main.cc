@@ -35,8 +35,8 @@ struct ShuffleArgs : public argparse::Args {
   std::optional<unsigned int> &seed =
     kwarg("s,seed",
           "seed for random number generator.");
-  bool &standard = flag("S,standard",
-                        "use STL version of shuffle().");
+  bool &homebrew = flag("N,nonstandard",
+                        "use homebrew version of shuffle().");
 
   void prolog() override {
     std::cout << R"(
@@ -170,17 +170,9 @@ Shuffler::computeProbs()
 void
 Shuffler::shuffle()
 {
-  static bool once = false;
   if (_standard) {
-    // For some reason, then standard library function gives weird
-    // results for lengths of 11 and 12 with the default parameters to
-    // the problem. To wit, they never seem to occur.
     std::shuffle(_deck.begin(), _deck.end(), _prng);
   } else {
-    if (not once) {
-      std::cout << "Using home-brew shuffle." << std::endl;
-      once = true;
-    } //
     std::uniform_int_distribution<> rng(0, _n-1);
     for (size_t idx = 0; idx < _n; ++idx) {
       size_t jdx = rng(_prng);
@@ -241,7 +233,7 @@ main(int argc, char *argv[])
                       args.m,
                       args.seed ? args.seed.value()
                       : std::random_device()(),
-                      args.standard);;
+                      ! args.homebrew);;
 
     while (true) {
       shuffler.runOne();

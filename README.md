@@ -16,13 +16,16 @@ cd src
 make
 ./shuffler
 ```
-Enter `./shuffler -?` to see all options.
+You can perform the calculations and simulation for arbitrary deck sizes
+and number of face cards using the --n and --m options. The defaults are
+--n=52 and --m=12 which correspond to the original problem. Enter
+`./shuffler -?` to see all options.
 
 The program first calculates the probabilities and then starts to
 simulate random shuffles indefinitely. To print out current statistics,
 type Ctrl+C (SIGINT). Type Ctrl+\ (SIGQUIT) to print statistics and exit.
 
-The probabilities for thos that do not want to run the code are:
+The probabilities for those that do not want to run the code are:
  0 : 0.769231  
  1 : 0.180995  
  2 : 0.039819  
