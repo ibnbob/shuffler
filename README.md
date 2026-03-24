@@ -25,7 +25,7 @@ The program first calculates the probabilities and then starts to
 simulate random shuffles indefinitely. To print out current statistics,
 type Ctrl+C (SIGINT). Type Ctrl+\ (SIGQUIT) to print statistics and exit.
 
-The probabilities for those that do not want to run the code are:
+The probabilities for those that do not want to run the code are:  
  0 : 0.769231  
  1 : 0.180995  
  2 : 0.039819  
