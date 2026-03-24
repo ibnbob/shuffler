@@ -23,16 +23,16 @@ simulate random shuffles indefinitely. To print out current statistics,
 type Ctrl+C (SIGINT). Type Ctrl+\ (SIGQUIT) to print statistics and exit.
 
 The probabilities for thos that do not want to run the code are:
- 0 : 0.769231
- 1 : 0.180995
- 2 : 0.039819
- 3 : 0.00812633
- 4 : 0.00152369
- 5 : 0.000259351
- 6 : 3.94664e-05
- 7 : 5.26219e-06
- 8 : 5.97976e-07
- 9 : 5.56257e-08
-10 : 3.97326e-09
-11 : 1.93818e-10
-12 : 4.84544e-12
+ 0 : 0.769231  
+ 1 : 0.180995  
+ 2 : 0.039819  
+ 3 : 0.00812633  
+ 4 : 0.00152369  
+ 5 : 0.000259351  
+ 6 : 3.94664e-05  
+ 7 : 5.26219e-06  
+ 8 : 5.97976e-07  
+ 9 : 5.56257e-08  
+10 : 3.97326e-09  
+11 : 1.93818e-10  
+12 : 4.84544e-12  
