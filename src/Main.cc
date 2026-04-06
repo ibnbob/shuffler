@@ -15,6 +15,8 @@
 #include <iomanip>
 #include <iostream>
 
+#include <termios.h>
+
 using Deck = std::vector<unsigned int>;
 
 //      Function : handler
@@ -71,6 +73,12 @@ public:
     _trials(0),
     _standard(standard)
   {
+    tcgetattr(STDIN_FILENO, &_start);
+    _update = _start;
+    _update.c_lflag &= ~ECHOCTL;
+    // std::cout << "Disabling ECHOCTL." << std::endl;
+    tcsetattr(STDIN_FILENO, TCSANOW, &_update);
+
     std::cout << "seed=" << seed << std::endl;
     _deck.resize(_n);
     std::iota(_deck.begin(), _deck.end(), 0);
@@ -79,14 +87,17 @@ public:
   }; // CTOR
   Shuffler(size_t n, size_t m) : Shuffler(n, m, 0xdeadbeef, false) {};
   Shuffler() : Shuffler(52, 12) {};
-  ~Shuffler() {}; // DTOR
+  ~Shuffler() {
+    // std::cout << "Enabling ECHOCTL." << std::endl;
+    tcsetattr(STDIN_FILENO, TCSANOW, &_start);
+  }; // DTOR
 
   Shuffler(const Shuffler &) = delete; // Copy CTOR
   Shuffler &operator=(const Shuffler &) = delete; // Copy assignment
   Shuffler(Shuffler &&) = delete; // Move CTOR
   Shuffler &operator=(Shuffler &&) = delete; // Move assignment
 
-  void runOne() {
+  bool runOne() {
     shuffle();
     size_t cnt = 0;
     while(_deck[cnt] < _m) {
@@ -94,14 +105,14 @@ public:
     } // while
     ++_counts[cnt];
     ++_trials;
-    checkIntr();
+    return checkIntr();
   } // runOne
 
 
 private:
   void computeProbs();
   void shuffle();
-  void checkIntr();
+  bool checkIntr();
   void printStats();
 
   // Data
@@ -115,6 +126,9 @@ private:
   size_t _trials;
   std::vector<size_t> _counts;
   bool _standard;
+
+  struct termios _start;
+  struct termios _update;
 }; // Shuffler
 
 
@@ -183,17 +197,19 @@ Shuffler::shuffle()
 
 
 //      Function : Shuffler::checkIntr
-//      Abstract : Check for SIGINT and SIGQUIT
-void
+//      Abstract : Check for SIGINT and SIGQUIT. Return false for SIGQUIT.
+bool
 Shuffler::checkIntr()
 {
   if (::gSignal) {
     printStats();
     if (::gSignal == SIGQUIT) {
-      exit(0);
+      return false;
     } // if quit
     ::gSignal = 0;
   } // if intr
+
+  return true;
 } // Shuffler::checkIntr
 
 
@@ -229,15 +245,17 @@ main(int argc, char *argv[])
   args.print();
 
   if (args.m <= args.n) {
+    std::cout << R"(
+Type Ctrl+C (SIGINT) to print out current statistics.
+Type Ctrl+\ (SIGQUIT) to print statistics and exit.
+)" << std::endl;
     Shuffler shuffler(args.n,
                       args.m,
                       args.seed ? args.seed.value()
                       : std::random_device()(),
                       ! args.homebrew);;
 
-    while (true) {
-      shuffler.runOne();
-    } // while
+    while (shuffler.runOne());
   } else {
     std::cerr << "Argument m must be less than or equal to argument n."
               << std::endl;
