@@ -34,6 +34,8 @@ handler(int sig)
 struct ShuffleArgs : public argparse::Args {
   size_t &n = kwarg("n", "size of deck.").set_default(52);
   size_t &m = kwarg("m", "number of target (face) cards.").set_default(12);
+  size_t &maxTrials = kwarg("M,max_trials",
+                            "maximum number of trials.").set_default(SIZE_MAX);
   std::optional<unsigned int> &seed =
     kwarg("s,seed",
           "seed for random number generator.");
@@ -66,9 +68,11 @@ type Ctrl+C (SIGINT). Type Ctrl+\ (SIGQUIT) to print statistics and exit.
 //      Abstract : Class for shuffling a deck of n cards.
 class Shuffler {
 public:
-  Shuffler(size_t n, size_t m, unsigned int seed, bool standard) :
+  Shuffler(size_t n, size_t m, size_t maxTrials,
+           unsigned int seed, bool standard) :
     _n(n),
     _m(m),
+    _maxTrials(maxTrials),
     _prng(seed),
     _trials(0),
     _standard(standard)
@@ -85,7 +89,7 @@ public:
     _counts.resize(_m+1, 0);
     computeProbs();
   }; // CTOR
-  Shuffler(size_t n, size_t m) : Shuffler(n, m, 0xdeadbeef, false) {};
+  Shuffler(size_t n, size_t m) : Shuffler(n, m, SIZE_MAX, 0xdeadbeef, false) {};
   Shuffler() : Shuffler(52, 12) {};
   ~Shuffler() {
     // std::cout << "Enabling ECHOCTL." << std::endl;
@@ -108,7 +112,6 @@ public:
     return checkIntr();
   } // runOne
 
-
 private:
   void computeProbs();
   void shuffle();
@@ -118,6 +121,7 @@ private:
   // Data
   size_t _n;
   size_t _m;
+  size_t _maxTrials;
   std::default_random_engine _prng;
 
   std::vector<double> _probability;
@@ -188,16 +192,21 @@ Shuffler::shuffle()
     std::shuffle(_deck.begin(), _deck.end(), _prng);
   } else {
     std::uniform_int_distribution<> rng(0, _n-1);
-    for (size_t idx = 0; idx < _n; ++idx) {
-      size_t jdx = rng(_prng);
-      std::swap(_deck[idx], _deck[jdx]);
+    for (auto &card : _deck) {
+      const size_t jdx = rng(_prng);
+      std::swap(card, _deck[jdx]);
     } // for
+    // for (size_t idx = 0; idx < _n; ++idx) {
+    //   const size_t jdx = rng(_prng);
+    //   std::swap(_deck[idx], _deck[jdx]);
+    // } // for
   } // if
 } // Shuffler::shuffle
 
 
 //      Function : Shuffler::checkIntr
-//      Abstract : Check for SIGINT and SIGQUIT. Return false for SIGQUIT.
+//      Abstract : Check for max trials, SIGINT and SIGQUIT. Return
+//      false for SIGQUIT or max trials.
 bool
 Shuffler::checkIntr()
 {
@@ -207,6 +216,9 @@ Shuffler::checkIntr()
       return false;
     } // if quit
     ::gSignal = 0;
+  } else if (_trials >= _maxTrials) {
+    printStats();
+    return false;
   } // if intr
 
   return true;
@@ -219,17 +231,24 @@ void
 Shuffler::printStats()
 {
   std::cout << "\nTrials: " << _trials << std::endl;
-  for (size_t jdx = 0; jdx <= _m; ++jdx) {
-    double e = (static_cast<double>(_trials) * _probability[jdx]);
-    std::cout << std::setw(2) << jdx << " : "
+  for (size_t idx = 0; idx <= _m; ++idx) {
+    double e = (static_cast<double>(_trials) * _probability[idx]);
+    std::cout << std::setw(2) << idx << " : "
               << std::setw(16)
-              << _counts[jdx] << " : "
+              << _counts[idx] << " : "
               << std::fixed
               << std::setprecision(2)
               << e
               << std::endl;
 
   } // for
+
+  // size_t cnt = 0;
+  // for (const auto &val : _deck) {
+  //   std::cout << std::setw(2) << val
+  //             << ((++cnt % 13) ? " " : "\n")
+  //             << std::flush;
+  // } // for
 } // Shuffler::printStats
 
 
@@ -251,6 +270,7 @@ Type Ctrl+\ (SIGQUIT) to print statistics and exit.
 )" << std::endl;
     Shuffler shuffler(args.n,
                       args.m,
+                      args.maxTrials,
                       args.seed ? args.seed.value()
                       : std::random_device()(),
                       ! args.homebrew);;
