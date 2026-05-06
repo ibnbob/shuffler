@@ -1,6 +1,6 @@
 CCSRCS 	= 
 EXPORT	= 
-ESRC 	= Main.cc
+ESRC 	= Main.cc Shuffler.cc
 EXE	= shuffler
 LIB	= 
 LIBS    = 
