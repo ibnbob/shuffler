@@ -7,7 +7,7 @@
 
 #include <algorithm>
 #include <cassert>
-
+#include <thread>
 
 //      Function : handler
 //      Abstract : Handle a SIGINT
@@ -24,11 +24,13 @@ handler(int sig)
 Shuffler::Shuffler(size_t n,
                    size_t m,
                    size_t maxTrials,
+                   size_t numThreads,
                    unsigned int seed,
                    bool stdShuff) :
   _n(n),
   _m(m),
   _maxTrials(maxTrials),
+  _numThreads(numThreads),
   _prng(seed),
   _trials(0),
   _stdShuff(stdShuff)
@@ -143,15 +145,28 @@ Shuffler::printStats()
 void
 Shuffler::simulate()
 {
-  const size_t chunkSz = 1 << 20;
+    std::cout << R"(
+Type Ctrl+C (SIGINT) to print out current statistics.
+Type Ctrl+\ (SIGQUIT) to print statistics and exit.
+)" << std::endl;
+
+    const size_t chunkSz = 1 << 20;
   std::uniform_int_distribution<size_t> seeds(0, SIZE_MAX);
 
   while (checkIntr()) {
-    size_t trials = std::min(chunkSz, (_maxTrials - _trials));
-    ShuffleThread chunk(_n, _m, trials, seeds(_prng), _stdShuff);
-    chunk();
-    accumulate(chunk);
-    _trials += trials;
+    std::vector<ShuffleThread> insts;
+    std::vector<std::thread> threads;
+
+    for (size_t tdx = 0; tdx < _numThreads; ++ tdx) {
+      size_t trials = std::min(chunkSz, (_maxTrials - _trials));
+      insts.emplace_back(*this, trials, seeds(_prng));
+      threads.emplace_back(insts[tdx]);
+      _trials += trials;
+    } // for
+
+    for (size_t tdx = 0; tdx < _numThreads; ++ tdx) {
+      threads[tdx].join();
+    } // for
   } // while
 } // Shuffler::simulate
 
@@ -171,16 +186,15 @@ Shuffler::accumulate(ShuffleThread &thread)
 //      Function : ShuffleThread::ShuffleThread
 //      Abstract : CTOR
 
-ShuffleThread::ShuffleThread(size_t n,
-                             size_t m,
+ShuffleThread::ShuffleThread(Shuffler &parent,
                              size_t trials,
-                             unsigned int seed,
-                             bool stdShuff)
-  : _n(n),
-    _m(m),
+                             unsigned int seed)
+  : _parent(parent),
+    _n(parent._n),
+    _m(parent._m),
     _trials(trials),
     _prng(seed),
-    _stdShuff(stdShuff)
+    _stdShuff(_parent._stdShuff)
 {
   _deck.resize(_n);
   std::iota(_deck.begin(), _deck.end(), 0);
@@ -196,6 +210,7 @@ ShuffleThread::run()
   while (_trials--) {
     runOne();
   } // while
+  _parent.accumulate(*this);
 } // ShuffleThread::run
 
 //      Function : ShuffleThread::runOne

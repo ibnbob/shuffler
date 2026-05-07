@@ -24,9 +24,12 @@ public:
   Shuffler(size_t n,
            size_t m,
            size_t maxTrials,
+           size_t numThreads,
            unsigned int seed,
            bool stdShuff);
-  Shuffler(size_t n, size_t m) : Shuffler(n, m, SIZE_MAX, 0xdeadbeef, false) {};
+  Shuffler(size_t n, size_t m) : Shuffler(n, m, SIZE_MAX,
+                                          1, 0xdeadbeef,
+                                          false) {};
   Shuffler() : Shuffler(52, 12) {};
   ~Shuffler() {
     // std::cout << "Enabling ECHOCTL." << std::endl;
@@ -43,6 +46,8 @@ public:
   void accumulate(ShuffleThread &thread);
 
  private:
+  friend class ShuffleThread;
+
   bool checkIntr();
   void printStats();
 
@@ -50,6 +55,7 @@ public:
   size_t _n;
   size_t _m;
   size_t _maxTrials;
+  size_t _numThreads;
   std::default_random_engine _prng;
 
   std::vector<double> _probability;
@@ -68,27 +74,27 @@ public:
 //      Abstract : One shuffle thread.
 class ShuffleThread {
 public:
-  ShuffleThread(size_t n,
-                size_t m,
+  ShuffleThread(Shuffler &parent,
                 size_t trials,
-                unsigned int seed,
-                bool stdShuff); // CTOR
+                unsigned int seed); // CTOR
   ~ShuffleThread() {}; // DTOR
 
   void operator()() {
     run();
   } // functor operator
 
-  ShuffleThread(const ShuffleThread &) = delete; // Copy CTOR
-  ShuffleThread &operator=(const ShuffleThread &) = delete; // Copy assignment
-  ShuffleThread(ShuffleThread &&) = delete; // Move CTOR
-  ShuffleThread &operator=(ShuffleThread &&) = delete; // Move assignment
+  ShuffleThread(const ShuffleThread &) = default; // Copy CTOR
+  ShuffleThread &operator=(const ShuffleThread &) = default; // Copy assignment
+  ShuffleThread(ShuffleThread &&) = default; // Move CTOR
+  ShuffleThread &operator=(ShuffleThread &&) = default; // Move assignment
 private:
   friend class Shuffler;
 
   void run();
   void runOne();
   void shuffle();
+
+  Shuffler &_parent;
 
   size_t _n;
   size_t _m;
