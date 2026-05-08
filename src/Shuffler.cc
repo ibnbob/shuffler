@@ -177,6 +177,7 @@ void
 Shuffler::accumulate(ShuffleThread &thread)
 {
   assert(_m == thread._m);
+  std::lock_guard<std::mutex> lock(_countMutex);
   for (size_t idx = 0; idx <= _m; ++idx) {
     _counts[idx] += thread._counts[idx];
   } // for

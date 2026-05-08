@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
+#include <mutex>
 #include <random>
 #include <termios.h>
 #include <vector>
@@ -62,6 +63,7 @@ public:
 
   Deck _deck;
   size_t _trials;
+  std::mutex _countMutex;
   std::vector<size_t> _counts;
   bool _stdShuff;
 
